@@ -1,4 +1,4 @@
-# Ufanet Intercom API
+# Domru Intercom API
 
 ### Описание / Description
 [Обёртка API](https://pypi.org/project/domru-intercom-api/) для управления домофоном провайдера **Дом.ру**.
