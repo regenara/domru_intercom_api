@@ -95,7 +95,8 @@ class DomruIntercomAPI:
                 raise ClientConnectorDomruIntercomAPIError('Client connector error')
 
             except UnauthorizedDomruIntercomAPIError as e:
-                self._logger.error('Response=%s UnauthorizedDomruIntercomAPIError, trying get access_token', request_id)
+                self._logger.error('Response=%s UnauthorizedDomruIntercomAPIError, trying get access_token',
+                                   request_id)
                 await self._set_access_token(error=str(e))
 
     @property
