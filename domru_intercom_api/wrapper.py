@@ -98,6 +98,10 @@ class DomruIntercomAPI:
                 self._logger.error('Response=%s UnauthorizedDomruIntercomAPIError, trying get access_token', request_id)
                 await self._set_access_token(error=str(e))
 
+    @property
+    def access_token(self) -> Optional[str]:
+        return self._access_token
+
     def _get_hash1(self) -> str:
         password_bytes = self._password.encode('iso-8859-1')
         sha1_digest = hashlib.sha1(password_bytes).digest()
@@ -124,7 +128,7 @@ class DomruIntercomAPI:
             self._access_token = token.access_token
         else:
             if self._access_token is None:
-                error = 'Create'
+                error = None
             raise AuthDataRequiredDomruIntercomAPIError(error)
 
     async def get_subscriber_places(self) -> List[SubscriberPlaceSchema]:
