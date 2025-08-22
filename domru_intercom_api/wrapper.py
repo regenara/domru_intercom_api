@@ -27,6 +27,7 @@ from .exceptions import (AuthDataRequiredDomruIntercomAPIError,
                          TimeoutDomruIntercomAPIError,
                          UnauthorizedDomruIntercomAPIError,
                          UnknownDomruIntercomAPIError)
+from .logger import SafeLogger
 from .schemas import (DeviceSchema,
                       EventSchema,
                       OpenResultSchema,
@@ -49,7 +50,7 @@ class DomruIntercomAPI:
             'User-Agent': 'Xiaomi MIX2S | Android 10 | erth | 8.26.0 (82600010) | | null | '
                           'd5c78d0a-9cbe-4bea-b66a-b8296d947b62 | null'
         }
-        self._logger: logging = logging.getLogger('DomruIntercomAPI')
+        self._logger = SafeLogger('DomruIntercomAPI')
         self._logger.setLevel(level)
 
         ssl_context = ssl.create_default_context(cafile=certifi.where())
@@ -64,8 +65,8 @@ class DomruIntercomAPI:
                 **self._headers
             }
             request_id = uuid4().hex
-            self._logger.info('Request=%s method=%s url=%s params=%s json=%s',
-                              request_id, method, url, params, json)
+            self._logger.info('Request=%s method=%s url=%s params=%s json=%s headers=%s',
+                              request_id, method, url, params, json, headers_)
             try:
                 async with self.session.request(method, url, params=params, json=json, headers=headers_) as response:
                     if response.status == 401:
@@ -82,8 +83,9 @@ class DomruIntercomAPI:
                     return json_response
 
             except (JSONDecodeError, ContentTypeError) as e:
-                self._logger.error('Response=%s unsuccessful request status=%s reason=%s error=%s',
-                                   request_id, response.status, response.reason, e)
+                raw_response = await response.text()
+                self._logger.error('Response=%s unsuccessful request status=%s reason=%s raw=% error=%s',
+                                   request_id, response.status, response.reason, raw_response, e)
                 raise UnknownDomruIntercomAPIError(f'Unknown error: {response.status} {response.reason}')
 
             except asyncio.exceptions.TimeoutError:
