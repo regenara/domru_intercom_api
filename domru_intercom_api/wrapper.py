@@ -81,8 +81,8 @@ class DomruIntercomAPI:
                 async with self.session.request(method, url, params=params, json=json, headers=headers_) as response:
                     if response.status == 401:
                         raise UnauthorizedDomruIntercomAPIError(await response.text())
-
                     json_response = await response.json()
+
                     error_response = ErrorSchema()
                     if isinstance(json_response, str):
                         error_response.error_message = json_response
