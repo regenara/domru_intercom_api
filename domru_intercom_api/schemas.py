@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import (Any,
                     List,
                     Optional)
@@ -135,3 +136,16 @@ class EventSchema(BaseModel):
 class RefreshSchema(BaseModel):
     refresh_token: Optional[str]
     operator_id: Optional[int]
+
+
+class TemporalCodeSchema(BaseModel):
+    code: str
+    update_date: datetime
+    access_control_id: int
+    type: str
+
+
+class ErrorSchema(BaseModel):
+    error: Optional[str] = None
+    error_code: Optional[int] = None
+    error_message: Optional[str] = None

@@ -16,6 +16,14 @@ class AuthDataRequiredDomruIntercomAPIError(DomruIntercomAPIError):
         super().__init__(message)
 
 
+class DeviceUnavailableDomruIntercomAPIError(DomruIntercomAPIError):
+    """"""
+
+
+class TemporaryCodeFailedDomruIntercomAPIError(DomruIntercomAPIError):
+    """"""
+
+
 class ClientConnectorDomruIntercomAPIError(DomruIntercomAPIError):
     """"""
 

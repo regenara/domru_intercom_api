@@ -4,11 +4,6 @@ import certifi
 import hashlib
 import logging
 import ssl
-from aiohttp import (ClientSession,
-                     ClientTimeout,
-                     TCPConnector)
-from aiohttp.client_exceptions import (ClientConnectorError,
-                                       ContentTypeError)
 from datetime import (datetime,
                       timezone)
 from json.decoder import JSONDecodeError
@@ -16,22 +11,33 @@ from typing import (Any,
                     Dict,
                     List,
                     Literal,
-                    Optional)
+                    Optional,
+                    Union)
 from urllib.parse import (urljoin,
                           urlparse)
 from uuid import uuid4
 
+from aiohttp import (ClientSession,
+                     ClientTimeout,
+                     TCPConnector)
+from aiohttp.client_exceptions import (ClientConnectorError,
+                                       ContentTypeError)
+
 from .exceptions import (AuthDataRequiredDomruIntercomAPIError,
                          ClientConnectorDomruIntercomAPIError,
+                         DeviceUnavailableDomruIntercomAPIError,
+                         TemporaryCodeFailedDomruIntercomAPIError,
                          TimeoutDomruIntercomAPIError,
                          UnauthorizedDomruIntercomAPIError,
                          UnknownDomruIntercomAPIError)
 from .logger import SafeLogger
 from .schemas import (DeviceSchema,
+                      ErrorSchema,
                       EventSchema,
                       OpenResultSchema,
                       RefreshSchema,
                       SubscriberPlaceSchema,
+                      TemporalCodeSchema,
                       TokenSchema)
 
 
@@ -61,7 +67,8 @@ class DomruIntercomAPI:
                                                     timeout=ClientTimeout(total=timeout))
 
     async def _send_request(self, url: str, method: str = 'GET', params: Dict[str, Any] = None,
-                            json: Dict[str, Any] = None, headers: Dict[str, Any] = None) -> Dict[str, Any]:
+                            json: Dict[str, Any] = None,
+                            headers: Dict[str, Any] = None) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         while True:
             headers_ = headers or {
                 'Authorization': f'Bearer {self._access_token}',
@@ -73,17 +80,35 @@ class DomruIntercomAPI:
             try:
                 async with self.session.request(method, url, params=params, json=json, headers=headers_) as response:
                     if response.status == 401:
-                        error = await response.text()
-                        raise UnauthorizedDomruIntercomAPIError(error)
+                        raise UnauthorizedDomruIntercomAPIError(await response.text())
+
                     json_response = await response.json()
+                    error_response = ErrorSchema()
+                    if isinstance(json_response, str):
+                        error_response.error_message = json_response
+                    if isinstance(json_response, dict):
+                        error_response = ErrorSchema(**json_response)
+
                     if response.status == 403:
                         self._logger.error('Response=%s AuthDataRequiredDomruIntercomAPIError json_response=%s',
                                            request_id, json_response)
-                        raise AuthDataRequiredDomruIntercomAPIError(json_response)
+                        raise AuthDataRequiredDomruIntercomAPIError(error_response.error_message or json_response)
+
+                    if response.status == 531 and error_response.error_code == 6007:
+                        self._logger.error('Response=%s DeviceUnavailableDomruIntercomAPIError json_response=%s',
+                                           request_id, json_response)
+                        raise DeviceUnavailableDomruIntercomAPIError(error_response.error_message)
+
+                    if response.status == 500 and error_response.error_code == 6005:
+                        self._logger.error('Response=%s TemporaryCodeFailedDomruIntercomAPIError json_response=%s',
+                                           request_id, json_response)
+                        raise TemporaryCodeFailedDomruIntercomAPIError(error_response.error_message)
+
                     if response.status not in (200,):
                         self._logger.error('Response=%s unsuccessful request json_response=%s status=%s reason=%s',
                                            request_id, json_response, response.status, response.reason)
-                        raise UnknownDomruIntercomAPIError(json_response)
+                        raise UnknownDomruIntercomAPIError(error_response.error_message or json_response)
+
                     self._logger.info('Response=%s json_response=%s', request_id, json_response)
                     return json_response
 
@@ -102,8 +127,8 @@ class DomruIntercomAPI:
                 raise ClientConnectorDomruIntercomAPIError('Client connector error')
 
             except UnauthorizedDomruIntercomAPIError as e:
-                self._logger.error('Response=%s UnauthorizedDomruIntercomAPIError, trying get access_token',
-                                   request_id)
+                self._logger.error('Response=%s UnauthorizedDomruIntercomAPIError=%s, trying get access_token',
+                                   request_id, e)
                 await self._set_access_token()
 
     @property
@@ -182,6 +207,14 @@ class DomruIntercomAPI:
         }
         result = await self._send_request(url=url, method='POST', params=params, json=json)
         return [EventSchema(**e) for e in result['content']]
+
+    async def get_temporal_codes(self, *device_ids: int) -> list[TemporalCodeSchema]:
+        url = urljoin(self._base_url, 'rest/v1/temporal-codes')
+        params = {
+            'accessControlIds': ','.join(map(str, device_ids))
+        }
+        result = await self._send_request(url=url, params=params)
+        return [TemporalCodeSchema(**d) for d in result]
 
     async def close(self):
         await self.session.close()
