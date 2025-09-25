@@ -33,7 +33,11 @@ async def main():
     # Открытие всех доступных домофонов / Unlocking all available intercoms
     for device in devices:
         await domru_api.open_intercom(place_id=place_id, device_id=device.id)
-
+    
+    # Получение временных кодов / Get temporal codes
+    temporal_codes = await domru_api.get_temporal_codes(*[device.id for device in devices])
+    print(temporal_codes)
+    
     # Получение истории событий / Retrieving event history
     events = await domru_api.get_events(place_id, page=0, sort='ASC')
     for event in events:
