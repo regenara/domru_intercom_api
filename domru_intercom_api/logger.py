@@ -4,7 +4,7 @@ from typing import Any
 
 class SafeLogger(logging.Logger):
     SENSITIVE_KEYS = {
-        'accesstoken', 'refreshtoken', 'hash1', 'hash2', 'authorization'
+        'accesstoken', 'refreshtoken', 'hash1', 'hash2', 'authorization', 'bearer'
     }
 
     def __init__(self, name: str):

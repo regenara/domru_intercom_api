@@ -4,6 +4,11 @@ import certifi
 import hashlib
 import logging
 import ssl
+from aiohttp import (ClientSession,
+                     ClientTimeout,
+                     TCPConnector)
+from aiohttp.client_exceptions import (ClientConnectorError,
+                                       ContentTypeError)
 from datetime import (datetime,
                       timezone)
 from json.decoder import JSONDecodeError
@@ -16,12 +21,6 @@ from urllib.parse import (urljoin,
                           urlparse)
 from uuid import uuid4
 
-from aiohttp import (ClientSession,
-                     ClientTimeout,
-                     TCPConnector)
-from aiohttp.client_exceptions import (ClientConnectorError,
-                                       ContentTypeError)
-
 from .exceptions import (AuthDataRequiredDomruIntercomAPIError,
                          ClientConnectorDomruIntercomAPIError,
                          TimeoutDomruIntercomAPIError,
@@ -31,16 +30,20 @@ from .logger import SafeLogger
 from .schemas import (DeviceSchema,
                       EventSchema,
                       OpenResultSchema,
+                      RefreshSchema,
                       SubscriberPlaceSchema,
                       TokenSchema)
 
 
 class DomruIntercomAPI:
-    def __init__(self, login: Optional[str] = None, password: Optional[str] = None, access_token: Optional[str] = None,
+    def __init__(self, login: Optional[str] = None, password: Optional[str] = None,
+                 refresh_token: Optional[str] = None, operator_id: Optional[int] = None,
                  timeout: int = 5, level: logging = logging.INFO):
         self._login: Optional[str] = login
         self._password: Optional[str] = password
-        self._access_token: Optional[str] = access_token
+        self._refresh_token: Optional[str] = refresh_token
+        self._operator_id: Optional[int] = operator_id
+        self._access_token: Optional[str] = None
         self._hash2_prefix: str = 'DigitalHomeNTKpassword'
         self._secret: str = '789sdgHJs678wertv34712376'
         self._base_url: str = 'https://myhome.proptech.ru/'
@@ -74,6 +77,8 @@ class DomruIntercomAPI:
                         raise UnauthorizedDomruIntercomAPIError(error)
                     json_response = await response.json()
                     if response.status == 403:
+                        self._logger.error('Response=%s AuthDataRequiredDomruIntercomAPIError json_response=%s',
+                                           request_id, json_response)
                         raise AuthDataRequiredDomruIntercomAPIError(json_response)
                     if response.status not in (200,):
                         self._logger.error('Response=%s unsuccessful request json_response=%s status=%s reason=%s',
@@ -99,11 +104,11 @@ class DomruIntercomAPI:
             except UnauthorizedDomruIntercomAPIError as e:
                 self._logger.error('Response=%s UnauthorizedDomruIntercomAPIError, trying get access_token',
                                    request_id)
-                await self._set_access_token(error=str(e))
+                await self._set_access_token()
 
     @property
-    def access_token(self) -> Optional[str]:
-        return self._access_token
+    def refresh_data(self) -> RefreshSchema:
+        return RefreshSchema(refresh_token=self._refresh_token, operator_id=self._operator_id)
 
     def _get_hash1(self) -> str:
         password_bytes = self._password.encode('iso-8859-1')
@@ -116,8 +121,23 @@ class DomruIntercomAPI:
         hash2 = hashlib.md5(string.encode('utf-8')).hexdigest()
         return hash2
 
-    async def _set_access_token(self, error: str):
-        if self._login is not None and self._password is not None:
+    async def _set_access_token(self):
+        def _set_tokens(token_data: dict[str, Any]):
+            _token = TokenSchema(**token_data)
+            self._access_token = _token.access_token
+            self._refresh_token = _token.refresh_token
+            self._operator_id = _token.operator_id
+
+        if self._refresh_token is not None and self._operator_id is not None:
+            headers = {
+                'Bearer': self._refresh_token,
+                'Operator': str(self._operator_id)
+            }
+            url = urljoin(self._base_url, '/auth/v2/session/refresh')
+            result = await self._send_request(url=url, headers=headers)
+            _set_tokens(token_data=result)
+
+        elif self._login is not None and self._password is not None:
             url = urljoin(self._base_url, f'auth/v2/auth/{self._login}/password')
             timestamp = datetime.now(timezone.utc)
             json = {
@@ -127,12 +147,10 @@ class DomruIntercomAPI:
                 'hash2': self._get_hash2(timestamp=timestamp)
             }
             result = await self._send_request(url=url, method='POST', json=json, headers=self._headers)
-            token = TokenSchema(**result)
-            self._access_token = token.access_token
+            _set_tokens(token_data=result)
+
         else:
-            if self._access_token is None:
-                error = None
-            raise AuthDataRequiredDomruIntercomAPIError(error)
+            raise AuthDataRequiredDomruIntercomAPIError
 
     async def get_subscriber_places(self) -> List[SubscriberPlaceSchema]:
         url = urljoin(self._base_url, 'rest/v3/subscriber-places')

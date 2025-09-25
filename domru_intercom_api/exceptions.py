@@ -11,7 +11,7 @@ class AuthDataRequiredDomruIntercomAPIError(DomruIntercomAPIError):
         message = message or ('\n------------------------------------------------------------\n'
                               'domru_api = DomruIntercomAPI(login=LOGIN, password=PASSWORD)\n'
                               'OR\n'
-                              'domru_api = DomruIntercomAPI(access_token=ACCESS_TOKEN)'
+                              'domru_api = DomruIntercomAPI(refresh_token=REFRESH_TOKEN, operator_id=OPERATOR_ID)'
                               '\n------------------------------------------------------------\n')
         super().__init__(message)
 

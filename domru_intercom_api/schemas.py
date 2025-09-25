@@ -21,7 +21,7 @@ class BaseModel(PydanticBaseModel):
 class TokenSchema(BaseModel):
     operator_id: int
     operator_name: str
-    token_type: str
+    token_type: Optional[str]
     access_token: str
     expires_in: Optional[Any]
     refresh_token: str
@@ -130,3 +130,8 @@ class EventSchema(BaseModel):
     value: ValueSchema
     event_status_value: Optional[Any]
     actions: List
+
+
+class RefreshSchema(BaseModel):
+    refresh_token: Optional[str]
+    operator_id: Optional[int]

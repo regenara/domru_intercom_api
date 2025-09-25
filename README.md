@@ -16,13 +16,14 @@ from domru_intercom_api import DomruIntercomAPI
 
 LOGIN = 'your_login'
 PASSWORD = 'your_password'
-ACCESS_TOKEN = 'your_access_token'
+REFRESH_TOKEN = 'your_refresh_token'
+OPERATOR_ID = 13
 
 async def main():
     domru_api = DomruIntercomAPI(login=LOGIN, password=PASSWORD)
-    print(domru_api.access_token) # save access token
+    print(domru_api.refresh_data) # save refresh data
     # OR
-    domru_api = DomruIntercomAPI(access_token=ACCESS_TOKEN)
+    domru_api = DomruIntercomAPI(refresh_token=REFRESH_TOKEN, operator_id=OPERATOR_ID)
 
     # Получение списка мест / Get subscriber places
     places = await domru_api.get_subscriber_places()
