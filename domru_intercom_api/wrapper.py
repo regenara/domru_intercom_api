@@ -81,7 +81,14 @@ class DomruIntercomAPI:
                 async with self.session.request(method, url, params=params, json=json, headers=headers_) as response:
                     if response.status == 401:
                         raise UnauthorizedDomruIntercomAPIError(await response.text())
-                    json_response = await response.json()
+
+                    try:
+                        json_response = await response.json()
+                    except (JSONDecodeError, ContentTypeError) as e:
+                        raw_response = await response.text()
+                        self._logger.error('Response=%s unsuccessful request status=%s reason=%s raw=%s error=%s',
+                                           request_id, response.status, response.reason, raw_response, e)
+                        raise UnknownDomruIntercomAPIError(f'Unknown error: {response.status} {response.reason}')
 
                     error_response = ErrorSchema()
                     if isinstance(json_response, str):
@@ -111,12 +118,6 @@ class DomruIntercomAPI:
 
                     self._logger.info('Response=%s json_response=%s', request_id, json_response)
                     return json_response
-
-            except (JSONDecodeError, ContentTypeError) as e:
-                raw_response = await response.text()
-                self._logger.error('Response=%s unsuccessful request status=%s reason=%s raw=% error=%s',
-                                   request_id, response.status, response.reason, raw_response, e)
-                raise UnknownDomruIntercomAPIError(f'Unknown error: {response.status} {response.reason}')
 
             except asyncio.exceptions.TimeoutError:
                 self._logger.error('Response=%s TimeoutDomruIntercomAPIError', request_id)
